@@ -69,12 +69,16 @@ func (pool *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Write(bv.ByteSlice())
 }
 
-// Set sets pool's list of peers
-func (pool *HTTPPool) Set(peers ...string) {
+// SetPeers sets pool's list of peers
+func (pool *HTTPPool) SetPeers(peers ...string) {
 	pool.mu.Lock()
 	defer pool.mu.Unlock()
 	pool.peers = consistenthash.New(defaultReplicas, nil)
 	pool.peers.Add(peers...)
+	// dalay initialization
+	if pool.httpGetters == nil {
+		pool.httpGetters = make(map[string]*httpGetter)
+	}
 	for _, peer := range peers {
 		pool.httpGetters[peer] = &httpGetter{
 			baseURL: peer + pool.basePath,

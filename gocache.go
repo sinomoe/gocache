@@ -45,6 +45,8 @@ func NewGroup(name string, cacheBytes int, getter Getter) *Group {
 		name:      name,
 		getter:    getter,
 		mainCache: cache{cacheBytes: cacheBytes},
+		// initialize singleflight loader
+		loader: &singleflight.Group{},
 	}
 	groups[name] = g
 	return g
