@@ -1,9 +1,9 @@
 package gocache
 
 import (
+	"fmt"
+	"log"
 	"sync"
-
-	"errors"
 )
 
 // Getter describes user defined function used to get data
@@ -22,9 +22,11 @@ func (f GetterFunc) Get(key string) ([]byte, error) {
 
 // Group is a cache namespace and associated data loaded spread over
 type Group struct {
-	name      string
+	name string
+	// getter is use to load data from database when data is not in the cache
 	getter    Getter
 	mainCache cache
+	peers     PeerPicker
 }
 
 var mu sync.RWMutex
@@ -60,7 +62,7 @@ func GetGroup(name string) *Group {
 // Get gets the byteview according to the specified key
 func (g *Group) Get(key string) (ByteView, error) {
 	if key == "" {
-		return ByteView{}, errors.New("key is required")
+		return ByteView{}, fmt.Errorf("key is required")
 	}
 	// get is conccurent safe
 	if v, ok := g.mainCache.get(key); ok {
@@ -69,8 +71,8 @@ func (g *Group) Get(key string) (ByteView, error) {
 	return g.load(key)
 }
 
-// load loads data when cache missed according to user defined get function
-func (g *Group) load(key string) (ByteView, error) {
+// getLocally gets data from local cache
+func (g *Group) getLocally(key string) (ByteView, error) {
 	// when cache miss, get data according to user defined get function
 	bytes, err := g.getter.Get(key)
 	if err != nil {
@@ -80,4 +82,33 @@ func (g *Group) load(key string) (ByteView, error) {
 	// add byteview into cache
 	g.mainCache.add(key, bv)
 	return bv, nil
+}
+
+// getFromPeer gets data from peer
+func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
+	bytes, err := peer.Get(g.name, key)
+	if err != nil {
+		return ByteView{}, fmt.Errorf("falied to get from peers")
+	}
+	return ByteView{b: bytes}, nil
+}
+
+// load loads data when cache missed according to user defined get function
+func (g *Group) load(key string) (ByteView, error) {
+	if g.peers != nil {
+		if peerGetter, IsRemote := g.peers.PickPeer(key); IsRemote {
+			if bv, err := g.getFromPeer(peerGetter, key); err == nil {
+				return bv, nil
+			}
+			log.Println("falied to get from peers")
+		}
+	}
+	return g.getLocally(key)
+}
+
+// RegisterPeers registers a PeerPicker for choosing remote peer
+func (g *Group) RegisterPeers(peers PeerPicker) {
+	if g.peers != nil {
+		panic("RegisterPeerPicker called more than once")
+	}
 }

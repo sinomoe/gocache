@@ -2,18 +2,33 @@ package gocache
 
 import (
 	"fmt"
+	"gocache/consistenthash"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
+	"sync"
 )
 
-const defaultBasePath = "/_gocache/"
+const (
+	defaultBasePath = "/_gocache/"
+	defaultReplicas = 50
+)
 
-// HTTPPool contains a peer's name and path
+// HTTPPool is a http server contains a peer's name and path
 type HTTPPool struct {
-	self     string
+	// this peer's host name and port number
+	// eg: https//go.sino.moe:8000
+	self string
+	// api prefix
+	// eg: https//go.sino.moe:8000{basePath}{group}/{key}
 	basePath string
+
+	mu          sync.Mutex
+	peers       *consistenthash.Map
+	httpGetters map[string]*httpGetter
 }
 
 // NewHTTPPool creates an instace of http server which is used to
@@ -52,4 +67,62 @@ func (pool *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Write(bv.ByteSlice())
+}
+
+// Set sets pool's list of peers
+func (pool *HTTPPool) Set(peers ...string) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	pool.peers = consistenthash.New(defaultReplicas, nil)
+	pool.peers.Add(peers...)
+	for _, peer := range peers {
+		pool.httpGetters[peer] = &httpGetter{
+			baseURL: peer + pool.basePath,
+		}
+	}
+}
+
+// PickPeer picks a peer according to the specified key
+func (pool *HTTPPool) PickPeer(key string) (PeerGetter, bool) {
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
+	if peer := pool.peers.Get(key); peer != "" && peer != pool.self {
+		pool.Log("pick peer: %s", peer)
+		return pool.httpGetters[key], false
+	}
+	return nil, false
+}
+
+// interface assertion
+var (
+	_ PeerGetter = (*httpGetter)(nil)
+	_ PeerPicker = (*HTTPPool)(nil)
+)
+
+// httpGetter is a http client to get remote peers' data
+type httpGetter struct {
+	// remote peer's api base path
+	// by default is defaultBasePath
+	baseURL string
+}
+
+// Get uses an http client to get remote peers data
+func (h *httpGetter) Get(group, key string) ([]byte, error) {
+	u := fmt.Sprintf("%v%v/%v", h.baseURL, url.QueryEscape(group), url.QueryEscape(key))
+	res, err := http.Get(u)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("remote peer returned: %v", res.Status)
+	}
+
+	bytes, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body failed: %v", err)
+	}
+
+	return bytes, nil
 }
