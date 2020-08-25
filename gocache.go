@@ -2,6 +2,7 @@ package gocache
 
 import (
 	"fmt"
+	"gocache/singleflight"
 	"log"
 	"sync"
 )
@@ -27,6 +28,7 @@ type Group struct {
 	getter    Getter
 	mainCache cache
 	peers     PeerPicker
+	loader    *singleflight.Group
 }
 
 var mu sync.RWMutex
@@ -95,15 +97,21 @@ func (g *Group) getFromPeer(peer PeerGetter, key string) (ByteView, error) {
 
 // load loads data when cache missed according to user defined get function
 func (g *Group) load(key string) (ByteView, error) {
-	if g.peers != nil {
-		if peerGetter, IsRemote := g.peers.PickPeer(key); IsRemote {
-			if bv, err := g.getFromPeer(peerGetter, key); err == nil {
-				return bv, nil
+	bvi, err := g.loader.Do(key, func() (interface{}, error) {
+		if g.peers != nil {
+			if peerGetter, IsRemote := g.peers.PickPeer(key); IsRemote {
+				if bv, err := g.getFromPeer(peerGetter, key); err == nil {
+					return bv, nil
+				}
+				log.Println("falied to get from peers")
 			}
-			log.Println("falied to get from peers")
 		}
+		return g.getLocally(key)
+	})
+	if err != nil {
+		return ByteView{}, err
 	}
-	return g.getLocally(key)
+	return bvi.(ByteView), nil
 }
 
 // RegisterPeers registers a PeerPicker for choosing remote peer

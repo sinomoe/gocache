@@ -5,6 +5,7 @@ import (
 	"sync"
 )
 
+// cache is a concurrent access safe lru cache
 type cache struct {
 	mu         sync.Mutex
 	lru        *lru.Cache
