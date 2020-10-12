@@ -1,7 +1,7 @@
 package gocache
 
 import (
-	"gocache/lru"
+	"github.com/sinomoe/gocache/lru"
 	"sync"
 )
 

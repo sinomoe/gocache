@@ -2,7 +2,7 @@ package gocache
 
 import (
 	"fmt"
-	"gocache/consistenthash"
+	"github.com/sinomoe/gocache/consistenthash"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -60,10 +60,12 @@ func (pool *HTTPPool) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	g := GetGroup(groupName)
 	if g == nil {
 		http.Error(w, "group: "+groupName+" not exists!", http.StatusNotFound)
+		return
 	}
 	bv, err := g.Get(key)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Write(bv.ByteSlice())

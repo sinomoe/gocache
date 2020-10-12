@@ -2,7 +2,7 @@ package gocache
 
 import (
 	"fmt"
-	"gocache/singleflight"
+	"github.com/sinomoe/gocache/singleflight"
 	"log"
 	"sync"
 )
@@ -121,4 +121,5 @@ func (g *Group) RegisterPeers(peers PeerPicker) {
 	if g.peers != nil {
 		panic("RegisterPeerPicker called more than once")
 	}
+	g.peers = peers
 }

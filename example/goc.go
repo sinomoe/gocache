@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"gocache"
+	"github.com/sinomoe/gocache"
 	"log"
 	"net/http"
 )
@@ -87,5 +87,5 @@ func main() {
 	if api {
 		go startAPIServer(apiAddr, goc)
 	}
-	startCacheServer(addrMap[port], []string(addrs), goc)
+	startCacheServer(addrMap[port], addrs, goc)
 }
