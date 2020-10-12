@@ -1,6 +1,7 @@
 # 🦜 Gocache
 
 ![MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/sinomoe/gocache)](https://pkg.go.dev/github.com/sinomoe/gocache)
 
 gocache is a distributed caching library, adapted from groupcache, intended as a replacement for memcached in many cases.
 
